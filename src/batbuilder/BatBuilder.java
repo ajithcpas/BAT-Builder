@@ -8,6 +8,7 @@ package batbuilder;
 import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.Dialog;
+import java.awt.Dimension;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.event.ActionEvent;
@@ -24,6 +25,7 @@ import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTextField;
+import javax.swing.border.EmptyBorder;
 
 /**
  *
@@ -39,19 +41,23 @@ class Modal implements ActionListener
     public boolean confirm(JFrame frame, String msg)
     {
         dialog = new JDialog(frame,"Alert");
+        JPanel panel = new JPanel();
         ok_btn = new JButton("Ok");
         cancel_btn = new JButton("Cancel");
         dialog.setLayout(new BorderLayout());
+        JLabel label = new JLabel(msg);
+        label.setBorder(new EmptyBorder(10, 10, 10, 10));
         
-        dialog.add(new JLabel(msg),BorderLayout.PAGE_START);
-        dialog.add(ok_btn,BorderLayout.EAST);
-        dialog.add(cancel_btn,BorderLayout.WEST);
-        dialog.setModalityType(Dialog.ModalityType.APPLICATION_MODAL);
+        panel.add(label,BorderLayout.PAGE_START);
+        panel.add(ok_btn,BorderLayout.WEST);
+        panel.add(cancel_btn,BorderLayout.EAST);
         
         ok_btn.addActionListener(this);
         cancel_btn.addActionListener(this);
         
-        dialog.setSize(200,200);
+        dialog.setModalityType(Dialog.ModalityType.APPLICATION_MODAL);
+        dialog.add(panel);
+        dialog.pack();
         dialog.setLocationRelativeTo(frame);
         dialog.setVisible(true);
         
@@ -62,9 +68,12 @@ class Modal implements ActionListener
     {
         dialog = new JDialog(frame,"Alert");
         dialog.setLayout(new BorderLayout());
-        dialog.add(new JLabel(msg),BorderLayout.PAGE_START);
+        JLabel label = new JLabel(msg);
+        label.setBorder(new EmptyBorder(10, 10, 10, 10));
+        dialog.add(label,BorderLayout.PAGE_START);
         dialog.setModalityType(Dialog.ModalityType.APPLICATION_MODAL);
-        dialog.setSize(200,200);
+    //    dialog.setSize(200,200);
+        dialog.pack();
         dialog.setLocationRelativeTo(frame);
         dialog.setVisible(true);
     }
@@ -82,7 +91,6 @@ public class BatBuilder implements ActionListener
     private static Logger logger = Logger.getLogger(BatBuilder.class.getName());
     JFrame frame = null;
     JPanel panel = null;
-    String title = "BAT Builder";
     JButton java_btn = null;
     JButton jar_btn = null;
     JButton out_btn = null;
@@ -93,7 +101,7 @@ public class BatBuilder implements ActionListener
     
     public BatBuilder()
     {
-        frame = new JFrame(title);
+        frame = new JFrame("BAT Builder");
         java_btn = new JButton("Open");
         jar_btn = new JButton("Open");
         out_btn = new JButton("Select");
@@ -106,9 +114,9 @@ public class BatBuilder implements ActionListener
         java_text = new JTextField();
         jar_text = new JTextField();
         out_text = new JTextField();
-       
+        
         panel = new JPanel(new GridBagLayout());
-        align(10,10,new JLabel("Java source file path:"));
+        align(10,10,new JLabel("Java file path:"));
         align(10,20,java_text);
         align(100,20,java_btn);
         align(10,40,new JLabel("Jar file path:"));
@@ -118,12 +126,13 @@ public class BatBuilder implements ActionListener
         align(10,70,out_text);
         align(100,70,out_btn);
         align(10,80,build_btn);
-        panel.setBounds(0, 20, 250, 200);
-        
         align(10,100,new JLabel("Copyright \u00a9 2017"));
+        java_text.setPreferredSize(new Dimension(300,20));
+        panel.setBorder(new EmptyBorder(10, 10, 10, 10));
         frame.add(panel);
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        frame.setSize(250,300);
+        
+        frame.pack();
         frame.setLayout(null);
         frame.setResizable(false);
         frame.setVisible(true);
@@ -141,10 +150,6 @@ public class BatBuilder implements ActionListener
             }
             File file = new File(out_text.getText());
             File tmp_dir = new File("bat_temp");
-            if(!tmp_dir.exists())
-            {
-                    tmp_dir.mkdir();
-            }
             if(file.exists())
             {
                 boolean stat = new Modal().confirm(frame,"Replace existing file?");
@@ -156,18 +161,32 @@ public class BatBuilder implements ActionListener
                 {
                     file.createNewFile();
                     fw = new FileWriter(file);
-                    fw.append("javac -d " + tmp_dir.getAbsolutePath() + " " + java_text.getText() + "\r\n");
-                    fw.append("cd " + tmp_dir.getAbsolutePath() + "\r\n");
+                    StringBuilder sb = new StringBuilder();
+                    sb.append("@echo off\r\n");
+                    sb.append("if exist ").append(quote(tmp_dir.getAbsolutePath())).append(" ( rmdir /s /q ").append(quote(tmp_dir.getAbsolutePath())).append(" )\r\n");
+                    sb.append("mkdir ").append(quote(tmp_dir.getAbsolutePath())).append("\r\n");
+                    sb.append("echo Compiling java file...\r\n");
+                    sb.append("javac -d ").append(quote(tmp_dir.getAbsolutePath())).append(" ").append(quote(java_text.getText())).append("\r\n");
+                    sb.append("if not %errorlevel% equ 0 ( \r\n echo Compilation failed.\r\n goto :END\r\n) ");
+                    sb.append("else ( \r\n echo Compilation success. )\r\n");
+                    sb.append("cd ").append(quote(tmp_dir.getAbsolutePath())).append("\r\n");
+                    sb.append("echo Updating jar file...\r\n");
                     File jar_file = new File(jar_text.getText());
+                    sb.append("jar ");
                     if(!jar_file.exists())
                     {
-                        fw.append("jar -cf " + jar_text.getText() + " " + "*" + "\r\n");
+                        sb.append("echo File not exist. Creating new JAR file...\r\n");
+                        sb.append("-cf ");
                     }
                     else
                     {
-                        fw.append("jar -uf " + jar_text.getText() + " " + "*" + "\r\n");
+                        sb.append("-uf ");
                     }
-                    fw.append("pause");
+                    sb.append(quote(jar_text.getText())).append(" *\r\n");
+                    sb.append("if not %errorlevel% equ 0 ( \r\n echo Updation failed.\r\n goto :END\r\n) ");
+                    sb.append("else ( \r\n echo Updation success. )\r\n");
+                    sb.append(":END\r\npause");
+                    fw.append(sb.toString());
                 }
                 catch(IOException ex)
                 {
@@ -222,6 +241,10 @@ public class BatBuilder implements ActionListener
         gb_constraints.gridy = y;
         gb_constraints.weighty = 0.5;
         panel.add(c,gb_constraints);
+    }
+    
+    private String quote(String text){
+        return "\"" + text + "\"";
     }
     
     /**
