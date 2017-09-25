@@ -172,15 +172,14 @@ public class BatBuilder implements ActionListener
                     sb.append("cd ").append(quote(tmp_dir.getAbsolutePath())).append("\r\n");
                     sb.append("echo Updating jar file...\r\n");
                     File jar_file = new File(jar_text.getText());
-                    sb.append("jar ");
                     if(!jar_file.exists())
                     {
                         sb.append("echo File not exist. Creating new JAR file...\r\n");
-                        sb.append("-cf ");
+                        sb.append("jar -cf ");
                     }
                     else
                     {
-                        sb.append("-uf ");
+                        sb.append("jar -uf ");
                     }
                     sb.append(quote(jar_text.getText())).append(" *\r\n");
                     sb.append("if not %errorlevel% equ 0 ( \r\n echo Updation failed.\r\n goto :END\r\n) ");
