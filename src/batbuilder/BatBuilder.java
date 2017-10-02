@@ -1,25 +1,17 @@
-/*
- * To change this license header, choose License Headers in Project Properties.
- * To change this template file, choose Tools | Templates
- * and open the template in the editor.
- */
 package batbuilder;
 
-import java.awt.BorderLayout;
-import java.awt.Component;
-import java.awt.Dialog;
 import java.awt.Dimension;
-import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.util.Hashtable;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.swing.JButton;
-import javax.swing.JDialog;
+import javax.swing.JCheckBox;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
@@ -31,61 +23,6 @@ import javax.swing.border.EmptyBorder;
  *
  * @author Ajith
  */
-class Modal implements ActionListener
-{
-    private boolean stat = false;
-    private JDialog dialog = null;
-    private JButton ok_btn = null;
-    private JButton cancel_btn = null;
-    
-    public boolean confirm(JFrame frame, String msg)
-    {
-        dialog = new JDialog(frame,"Alert");
-        JPanel panel = new JPanel();
-        ok_btn = new JButton("Ok");
-        cancel_btn = new JButton("Cancel");
-        dialog.setLayout(new BorderLayout());
-        JLabel label = new JLabel(msg);
-        label.setBorder(new EmptyBorder(10, 10, 10, 10));
-        
-        panel.add(label,BorderLayout.PAGE_START);
-        panel.add(ok_btn,BorderLayout.WEST);
-        panel.add(cancel_btn,BorderLayout.EAST);
-        
-        ok_btn.addActionListener(this);
-        cancel_btn.addActionListener(this);
-        
-        dialog.setModalityType(Dialog.ModalityType.APPLICATION_MODAL);
-        dialog.add(panel);
-        dialog.pack();
-        dialog.setLocationRelativeTo(frame);
-        dialog.setVisible(true);
-        
-        return stat;
-    }
-    
-    public void alert(JFrame frame, String msg)
-    {
-        dialog = new JDialog(frame,"Alert");
-        dialog.setLayout(new BorderLayout());
-        JLabel label = new JLabel(msg);
-        label.setBorder(new EmptyBorder(10, 10, 10, 10));
-        dialog.add(label,BorderLayout.PAGE_START);
-        dialog.setModalityType(Dialog.ModalityType.APPLICATION_MODAL);
-    //    dialog.setSize(200,200);
-        dialog.pack();
-        dialog.setLocationRelativeTo(frame);
-        dialog.setVisible(true);
-    }
-    
-    @Override
-    public void actionPerformed(ActionEvent e)
-    {
-        if(e.getSource() == ok_btn){ stat = true; }
-        else{ stat = false; }
-        dialog.setVisible(false);
-    }
-}
 public class BatBuilder implements ActionListener
 {
     private static Logger logger = Logger.getLogger(BatBuilder.class.getName());
@@ -98,6 +35,9 @@ public class BatBuilder implements ActionListener
     JTextField java_text = null;
     JTextField jar_text = null;
     JTextField out_text = null;
+    JCheckBox compile_options = null;
+    private String options = null;
+    private Hashtable<String,String> opt_obj = null;
     
     public BatBuilder()
     {
@@ -106,6 +46,10 @@ public class BatBuilder implements ActionListener
         jar_btn = new JButton("Open");
         out_btn = new JButton("Select");
         build_btn = new JButton("Build");
+        compile_options = new JCheckBox();
+        options = "";
+        opt_obj = new Hashtable<String,String>();
+        compile_options.addActionListener(this);
         java_btn.addActionListener(this);
         jar_btn.addActionListener(this);
         out_btn.addActionListener(this);
@@ -116,17 +60,23 @@ public class BatBuilder implements ActionListener
         out_text = new JTextField();
         
         panel = new JPanel(new GridBagLayout());
-        align(10,10,new JLabel("Java file path:"));
-        align(10,20,java_text);
-        align(100,20,java_btn);
-        align(10,40,new JLabel("Jar file path:"));
-        align(10,50,jar_text);
-        align(100,50,jar_btn);
-        align(10,60,new JLabel("Output file path:"));
-        align(10,70,out_text);
-        align(100,70,out_btn);
-        align(10,80,build_btn);
-        align(10,100,new JLabel("Copyright \u00a9 2017"));
+        BatUtils.align(10,10,new JLabel("Java file path:"),panel);
+        BatUtils.align(10,20,java_text,panel);
+        BatUtils.align(100,20,java_btn,panel);
+        
+        JPanel tmppanel = new JPanel();
+        tmppanel.add(compile_options);
+        tmppanel.add(new JLabel("include javac options"));
+        BatUtils.align(10,40,tmppanel,panel);
+        
+        BatUtils.align(10,60,new JLabel("Jar file path:"),panel);
+        BatUtils.align(10,70,jar_text,panel);
+        BatUtils.align(100,70,jar_btn,panel);
+        BatUtils.align(10,80,new JLabel("Output file path:"),panel);
+        BatUtils.align(10,90,out_text,panel);
+        BatUtils.align(100,90,out_btn,panel);
+        BatUtils.align(10,100,build_btn,panel);
+        BatUtils.align(10,110,new JLabel("Copyright \u00a9 2017"),panel);
         java_text.setPreferredSize(new Dimension(300,20));
         panel.setBorder(new EmptyBorder(10, 10, 10, 10));
         frame.add(panel);
@@ -148,8 +98,12 @@ public class BatBuilder implements ActionListener
                 new Modal().alert(frame,"Fields cannot be empty");
                 return;
             }
-            File file = new File(out_text.getText());
-            File tmp_dir = new File("bat_temp");
+            if(!compile_options.isSelected())
+            {
+                options = "";
+            }
+            File file = new File(out_text.getText() + ".bat");
+            File tmp_dir = new File(System.getProperty("java.io.tmpdir") + "bat_temp");
             if(file.exists())
             {
                 boolean stat = new Modal().confirm(frame,"Replace existing file?");
@@ -163,25 +117,26 @@ public class BatBuilder implements ActionListener
                     fw = new FileWriter(file);
                     StringBuilder sb = new StringBuilder();
                     sb.append("@echo off\r\n");
-                    sb.append("if exist ").append(quote(tmp_dir.getAbsolutePath())).append(" ( rmdir /s /q ").append(quote(tmp_dir.getAbsolutePath())).append(" )\r\n");
-                    sb.append("mkdir ").append(quote(tmp_dir.getAbsolutePath())).append("\r\n");
+                    sb.append("if exist ").append(BatUtils.quote(tmp_dir.getAbsolutePath())).append(" ( rmdir /s /q ").append(BatUtils.quote(tmp_dir.getAbsolutePath())).append(" )\r\n");
+                    sb.append("mkdir ").append(BatUtils.quote(tmp_dir.getAbsolutePath())).append("\r\n");
                     sb.append("echo Compiling java file...\r\n");
-                    sb.append("javac -d ").append(quote(tmp_dir.getAbsolutePath())).append(" ").append(quote(java_text.getText())).append("\r\n");
+                    sb.append("javac -d ").append(BatUtils.quote(tmp_dir.getAbsolutePath())).append(options).append(" ").append(BatUtils.quote(java_text.getText())).append("\r\n");
                     sb.append("if not %errorlevel% equ 0 ( \r\n echo Compilation failed.\r\n goto :END\r\n) ");
                     sb.append("else ( \r\n echo Compilation success. )\r\n");
-                    sb.append("cd ").append(quote(tmp_dir.getAbsolutePath())).append("\r\n");
+                    sb.append("cd ").append(BatUtils.quote(tmp_dir.getAbsolutePath())).append("\r\n");
                     sb.append("echo Updating jar file...\r\n");
                     File jar_file = new File(jar_text.getText());
+                    sb.append("jar ");
                     if(!jar_file.exists())
                     {
                         sb.append("echo File not exist. Creating new JAR file...\r\n");
-                        sb.append("jar -cf ");
+                        sb.append("-cf ");
                     }
                     else
                     {
-                        sb.append("jar -uf ");
+                        sb.append("-uf ");
                     }
-                    sb.append(quote(jar_text.getText())).append(" *\r\n");
+                    sb.append(BatUtils.quote(jar_text.getText())).append(" *\r\n");
                     sb.append("if not %errorlevel% equ 0 ( \r\n echo Updation failed.\r\n goto :END\r\n) ");
                     sb.append("else ( \r\n echo Updation success. )\r\n");
                     sb.append(":END\r\npause");
@@ -199,6 +154,33 @@ public class BatBuilder implements ActionListener
                     }
                 }
             
+        }
+        else if(e.getSource() == compile_options)
+        {
+            if(!compile_options.isSelected())
+            {
+                return;
+            }
+            opt_obj = new Modal().optionDialog(frame,opt_obj);
+            StringBuilder options = new StringBuilder();
+            if(opt_obj.containsKey("TARGET") && !opt_obj.get("TARGET").isEmpty())
+            {
+                options.append(" -target ").append(opt_obj.get("TARGET"));
+            }
+            if(opt_obj.containsKey("SOURCE") && !opt_obj.get("SOURCE").isEmpty())
+            {
+                options.append(" -source ").append(opt_obj.get("SOURCE"));
+            }
+            if(opt_obj.containsKey("BOOTCLASSPATH") && !opt_obj.get("BOOTCLASSPATH").isEmpty())
+            {
+                options.append(" -bootclasspath ").append(opt_obj.get("BOOTCLASSPATH"));
+            }
+            if(opt_obj.containsKey("CLASSPATH") && !opt_obj.get("CLASSPATH").isEmpty())
+            {
+                options.append(" -cp ").append(opt_obj.get("CLASSPATH"));
+            }
+            options.append(" ");
+            this.options = options.toString();
         }
         else
         {
@@ -231,19 +213,6 @@ public class BatBuilder implements ActionListener
                 }
             }
         }
-    }
-    
-    private void align(int x,int y,Component c){
-        GridBagConstraints gb_constraints = new GridBagConstraints();
-        gb_constraints.fill = GridBagConstraints.HORIZONTAL;
-        gb_constraints.gridx = x;
-        gb_constraints.gridy = y;
-        gb_constraints.weighty = 0.5;
-        panel.add(c,gb_constraints);
-    }
-    
-    private String quote(String text){
-        return "\"" + text + "\"";
     }
     
     /**
